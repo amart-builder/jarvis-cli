@@ -4,21 +4,23 @@ Today this group has one subcommand:
 
     jarvis codex install [--auto] [--for {codex,claude-code,both}]
 
-It writes a small Markdown instructions file (the canonical body lives in
-`jarvis.lib.agent_instructions.JARVIS_AGENT_INSTRUCTIONS`) into the agent's
-auto-loaded instructions directory:
+It injects a small Markdown block (the canonical body lives in
+`jarvis.lib.agent_instructions.JARVIS_AGENT_INSTRUCTIONS_BODY`) into the
+agent's auto-loaded global instructions file:
 
-  - Codex      → ~/.codex/instructions.d/jarvis.md
-  - Claude Code → ~/.claude/instructions/jarvis.md
+  - Codex CLI   → ~/.codex/AGENTS.md
+  - Claude Code → ~/.claude/CLAUDE.md
 
-The file teaches the agent how to use jarvis-cli when the user reports
-issues with their Jarvis appliance. Re-running the command produces a
-byte-identical file — safe to call from upgrade scripts and CI.
+The block is wrapped between stable markers (`<!-- BEGIN jarvis-cli ... -->`
+and `<!-- END jarvis-cli -->`), so the install command is safe even when
+the user already has content in those files: any existing content
+outside our markers is preserved verbatim. Re-running the command refreshes
+just our block; everything else is untouched.
 
 Writing files under `~/.codex/` and `~/.claude/` is not state-changing on
 the appliance, so this command is non-interactive (no `[y/N]` prompt) by
 design. Use `--auto` to suppress the per-file output line; otherwise the
-command prints what it wrote to stdout for visibility.
+command prints what it touched to stdout for visibility.
 """
 from __future__ import annotations
 
@@ -30,7 +32,7 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
-from jarvis.lib.agent_instructions import JARVIS_AGENT_INSTRUCTIONS
+from jarvis.lib.agent_instructions import upsert_block
 
 app = typer.Typer(
     name="codex",
@@ -46,22 +48,45 @@ class _Target(StrEnum):
 
 
 # Path templates relative to HOME — exposed for tests.
-CODEX_INSTRUCTIONS_RELPATH = ".codex/instructions.d/jarvis.md"
-CLAUDE_INSTRUCTIONS_RELPATH = ".claude/instructions/jarvis.md"
+# These match the documented auto-load conventions:
+#   - Codex CLI auto-loads ~/.codex/AGENTS.md (and project-local AGENTS.md)
+#   - Claude Code auto-loads ~/.claude/CLAUDE.md (and project-local CLAUDE.md)
+CODEX_INSTRUCTIONS_RELPATH = ".codex/AGENTS.md"
+CLAUDE_INSTRUCTIONS_RELPATH = ".claude/CLAUDE.md"
 CODEX_HOME_RELPATH = ".codex"
 CLAUDE_HOME_RELPATH = ".claude"
 
 
-def _atomic_write(path: Path, content: str) -> None:
-    """Write `content` to `path` via tmp-sibling + os.replace().
+def _atomic_upsert(path: Path) -> str:
+    """Inject or refresh our jarvis-cli block in `path`.
 
-    Creates parent directories as needed (mode 0o755). On any error the
-    exception propagates — the caller decides how to surface it.
+    Returns one of "created" / "updated-block" / "appended-block" describing
+    what happened. Atomic via tmp-sibling + os.replace(). Creates parent
+    directories as needed.
     """
+    existing: str | None = (
+        path.read_text(encoding="utf-8") if path.exists() else None
+    )
+
+    new_content = upsert_block(existing)
+
+    # Decide outcome label for the user message.
+    if existing is None:
+        outcome = "created"
+    elif existing == new_content:
+        outcome = "unchanged"
+    else:
+        # Was our block already there? upsert_block only changes the file in
+        # two ways: replacing between markers, or appending at end.
+        from jarvis.lib.agent_instructions import JARVIS_BLOCK_BEGIN
+
+        outcome = "updated-block" if JARVIS_BLOCK_BEGIN in existing else "appended-block"
+
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(content, encoding="utf-8")
+    tmp.write_text(new_content, encoding="utf-8")
     os.replace(tmp, path)
+    return outcome
 
 
 def _detect_codex(home: Path) -> bool:
@@ -90,11 +115,14 @@ def install(
         ),
     ] = False,
 ) -> None:
-    """Register jarvis-cli with Codex and/or Claude Code.
+    """Register jarvis-cli with Codex CLI and/or Claude Code.
 
-    Writes a fixed-body instructions Markdown file to the agent's
-    auto-loaded instructions directory. Idempotent — running twice
-    produces byte-identical output. Non-interactive — never prompts.
+    Injects a marker-delimited block of agent operating instructions into
+    the agent's global instructions file (`~/.codex/AGENTS.md` and/or
+    `~/.claude/CLAUDE.md`). Any existing content outside the markers is
+    preserved. Idempotent — re-running refreshes just our block.
+
+    Non-interactive — never prompts.
     """
     console = Console(quiet=auto)
     home = Path.home()
@@ -125,5 +153,5 @@ def install(
         raise typer.Exit(code=0)
 
     for name, path in targets:
-        _atomic_write(path, JARVIS_AGENT_INSTRUCTIONS)
-        console.print(f"[green]wrote[/green] {name}: {path}")
+        outcome = _atomic_upsert(path)
+        console.print(f"[green]{outcome}[/green] {name}: {path}")

@@ -1,23 +1,31 @@
 """Canonical agent-instructions body.
 
-This is the literal Markdown text that `jarvis codex install` writes to
-`~/.codex/instructions.d/jarvis.md` and `~/.claude/instructions/jarvis.md`.
-It teaches the agent (Codex / Claude Code / etc.) how to use jarvis-cli
-when the user reports problems with their Jarvis (OpenClaw) appliance.
+This is the literal Markdown text that `jarvis codex install` injects into
+`~/.codex/AGENTS.md` (Codex CLI's global instructions file) and
+`~/.claude/CLAUDE.md` (Claude Code's global instructions file).
 
-Treat this constant as the source of truth — the file is regenerated
-byte-for-byte by every `jarvis codex install` run, so any local edits to
-the installed copies will be overwritten on upgrade.
+The text is wrapped between `JARVIS_BLOCK_BEGIN` / `JARVIS_BLOCK_END`
+markers so the install command can append-or-replace just our block
+without overwriting any other content the user has in those files.
 
-Idempotency rule: this string MUST be deterministic given a fixed CLI
-version. No timestamps, no machine-specific paths, no per-invocation tokens.
+Treat the marker block as the source of truth — every `jarvis codex install`
+run rewrites just the block, byte-identically given a fixed CLI version,
+preserving everything outside the markers.
+
+Idempotency rule: the body MUST be deterministic given a fixed CLI version.
+No timestamps, no machine-specific paths, no per-invocation tokens.
 """
 from __future__ import annotations
 
-JARVIS_AGENT_INSTRUCTIONS = """\
-# Jarvis CLI is installed on this machine
+# Stable markers for find/replace inside an existing instructions file.
+# DO NOT change these once shipped — older installs would orphan the old block.
+JARVIS_BLOCK_BEGIN = "<!-- BEGIN jarvis-cli (auto-managed by `jarvis codex install`) -->"
+JARVIS_BLOCK_END = "<!-- END jarvis-cli -->"
 
-This file was written by `jarvis codex install` (from
+JARVIS_AGENT_INSTRUCTIONS_BODY = """\
+## Jarvis CLI is installed on this machine
+
+This block was injected by `jarvis codex install` (from
 https://github.com/amart-builder/jarvis-cli). Treat the rules below as
 operating instructions whenever the user mentions Jarvis or OpenClaw issues.
 
@@ -71,11 +79,11 @@ the docs you're reading actually are.
 ## State-changing commands (REQUIRE explicit user confirmation)
 
 - `jarvis restart <component>` — restart a service
-- `jarvis repair <subcommand>` — scoped repair operations
-- `jarvis recover` — full recovery walkthrough
+- `jarvis restart --all` — restart everything (built-in `[y/N]` prompt)
+- `jarvis repair <subcommand>` — scoped repair operations (built-in prompt)
+- `jarvis recover` — full recovery walkthrough (built-in prompt)
 
-These commands have their own confirmation prompts; respect those prompts.
-Never use `--yes`, `--force`, or piped `yes |` to bypass them.
+`restart --all`, `repair`, and `recover` have built-in `[y/N]` prompts; respect them. Single-component `restart <component>` does NOT prompt — that's why **YOU must ask the user first** before running ANY of these commands. Never use `--yes`, `--force`, or piped `yes |` to bypass a prompt.
 
 ## When you can't fix it
 
@@ -86,3 +94,55 @@ contact Alex with the `jarvis context --json` output attached.
 
 Do not loop indefinitely. Two failed attempts is the escalation point.
 """
+
+
+def render_block() -> str:
+    """Return the full marker-wrapped block to inject into a target file.
+
+    Format:
+        <BEGIN-marker>\\n
+        \\n
+        <body>\\n
+        \\n
+        <END-marker>\\n
+
+    Always ends with a single trailing newline so the file has a clean line
+    ending after our block.
+    """
+    return f"{JARVIS_BLOCK_BEGIN}\n\n{JARVIS_AGENT_INSTRUCTIONS_BODY}\n\n{JARVIS_BLOCK_END}\n"
+
+
+def upsert_block(existing: str | None) -> str:
+    """Inject or refresh our marker block in a host file's content.
+
+    - `existing is None` (file doesn't exist) → return just our block.
+    - existing has our markers → replace content between BEGIN..END.
+    - existing has no markers → append our block, separated by blank line.
+
+    Pure function — no I/O. The caller writes the result to disk atomically.
+    """
+    block = render_block()
+
+    if existing is None or existing == "":
+        return block
+
+    begin_idx = existing.find(JARVIS_BLOCK_BEGIN)
+    end_marker_pos = existing.find(JARVIS_BLOCK_END)
+
+    if begin_idx >= 0 and end_marker_pos >= 0 and end_marker_pos > begin_idx:
+        # Replace content between markers (inclusive of both markers).
+        end_marker_close = end_marker_pos + len(JARVIS_BLOCK_END)
+        # Consume an immediately-following newline so we don't accumulate them
+        # across upserts.
+        if end_marker_close < len(existing) and existing[end_marker_close] == "\n":
+            end_marker_close += 1
+        return existing[:begin_idx] + block + existing[end_marker_close:]
+
+    # No markers present — append at end with a sensible separator.
+    if existing.endswith("\n\n"):
+        sep = ""
+    elif existing.endswith("\n"):
+        sep = "\n"
+    else:
+        sep = "\n\n"
+    return existing + sep + block
