@@ -2,31 +2,37 @@
 
 > **For AI assistants reading this README.** If the user pasted this repo's URL into your chat and asked you to install it, the user is on their **laptop**, but their Jarvis appliance is almost certainly running on a **different machine** (a Mac Mini in their apartment, a NUC, or a VPS). Your job is to set the laptop up as a thin SSH client to that machine. Walk them through this:
 >
-> 1. Have them paste this one line into your terminal (their laptop). It downloads + installs `jarvis` and registers it with you, the agent:
+> 1. Have them paste this one line into their terminal (their laptop). It downloads + installs `jarvis` and registers it with you, the agent. Requires Python 3.11+ on macOS or Linux:
 >
 >    ```bash
 >    curl -sSL https://raw.githubusercontent.com/amart-builder/jarvis-cli/main/scripts/install.sh | bash
 >    ```
 >
-> 2. Then run the interactive onboarding:
+> 2. Then run the interactive onboarding — **the user types this in their own terminal**, not you. `jarvis onboard` is interactive by design and will hang if you spawn it as a subprocess:
 >
 >    ```bash
 >    jarvis onboard
 >    ```
 >
->    `jarvis onboard` auto-detects Tailscale peers, verifies SSH reachability, installs `jarvis-cli` on the remote appliance if it's not there yet, and writes `~/.jarvis/setup.toml`. Let it prompt the user — the prompts are designed for non-technical operators.
+>    It auto-detects Tailscale peers, verifies SSH reachability, installs `jarvis-cli` on the remote appliance if it's not there yet, and writes `~/.jarvis/setup.toml`. Translate the prompts for the user as needed (the prompts are written for non-technical operators).
 >
-> 3. Once `~/.jarvis/setup.toml` exists with `mode = "remote"`, every subsequent `jarvis <cmd>` on the laptop transparently SSHes the same command to the appliance and streams its output back. You can debug as if you were running on the appliance directly.
+> 3. Once `~/.jarvis/setup.toml` exists with `mode = "remote"`, every subsequent `jarvis <cmd>` on the laptop transparently SSHes the same command to the appliance and streams its output back. Start debugging with `jarvis context --json` — it's a single self-contained snapshot designed to fit in your context.
 >
-> If `~/.jarvis/setup.toml` is missing when the user reports a problem, **always run `jarvis onboard` first** before any other jarvis command — otherwise you'll be querying the wrong machine.
+> **State-changing commands always require explicit user confirmation.** `jarvis restart <component>` has NO built-in `[y/N]` prompt — you MUST ask the user first before running it. `jarvis restart --all`, `jarvis repair`, and `jarvis recover` have built-in prompts; respect them and never use `--yes`, `--force`, or piped `yes |` to bypass any prompt.
+>
+> If `~/.jarvis/setup.toml` is missing when the user reports a problem, **always run `jarvis onboard` first** before any other jarvis command — otherwise you'll be querying the wrong machine. If it exists with `mode = "local"` and the user is reporting an *appliance* problem, run `jarvis onboard --reset` to switch to remote mode.
 
 ---
 
-## One-line install (paste into Codex or Claude Code on the user's laptop)
+## One-line install (paste into Codex CLI or Claude Code on the user's laptop)
+
+> "Codex" here means [Codex CLI](https://github.com/openai/codex), OpenAI's command-line agent — not ChatGPT in a browser. The same install also works with [Claude Code](https://claude.ai/code).
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/amart-builder/jarvis-cli/main/scripts/install.sh | bash
 ```
+
+**Prerequisites:** Python 3.11+ on macOS or Linux. (Apple's preinstalled `python3` on older macOS is 3.9 — the installer will catch that and bail with a clear message. If that happens, install Python 3.11+ from https://www.python.org/downloads/ and re-run.)
 
 The installer drops `jarvis` onto your PATH and registers it with the agent (writes a marker block into `~/.codex/AGENTS.md` and/or `~/.claude/CLAUDE.md`). After install, run `jarvis onboard` once to wire the laptop to the appliance over SSH, then tell the agent: *"my Jarvis is broken — debug it."*
 
@@ -99,18 +105,21 @@ Both paths require [pipx](https://pipx.pypa.io/) and Python 3.11+.
 | `jarvis status` | Quick state summary of the appliance |
 | `jarvis health [--host <ip>]` | Health check every component |
 | `jarvis context [--json] [--no-docs]` | Full debug snapshot — versions, health, recent errors, sanitized config, bundled OpenClaw docs |
-| `jarvis docs <topic>` / `jarvis docs search <query>` | Query the embedded OpenClaw documentation |
+| `jarvis docs list` / `jarvis docs show <topic>` / `jarvis docs search <query>` | Query the embedded OpenClaw documentation |
 | `jarvis logs <component>` | Tail recent log lines for a component |
 | `jarvis diagnose` | Generate a packaged diagnostic report |
 | `jarvis version` | Print CLI / docs / OpenClaw versions |
 
-**State-changing** (require explicit confirmation — agents must ask the user first):
+**State-changing** (require explicit user confirmation — agents must ask first, every time):
 
-| Command | Purpose |
-|---|---|
-| `jarvis restart <component>` / `jarvis restart --all` | Restart a service / sequenced full restart |
-| `jarvis repair <subcommand>` | Scoped repair operations |
-| `jarvis recover` | Full recovery walkthrough |
+| Command | Built-in prompt? | Purpose |
+|---|---|---|
+| `jarvis restart <component>` | **No** — agent MUST ask user first | Restart a single service |
+| `jarvis restart --all` | Yes (`[y/N]`) | Sequenced full restart |
+| `jarvis repair <subcommand>` | Yes | Scoped repair operations |
+| `jarvis recover` | Yes | Full recovery walkthrough |
+
+Never bypass a built-in prompt with `--yes`, `--force`, or piped `yes |`.
 
 **Agent integration:**
 

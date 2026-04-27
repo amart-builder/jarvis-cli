@@ -47,7 +47,11 @@ PUBLIC_INSTALL_URL = "https://raw.githubusercontent.com/amart-builder/jarvis-cli
 PUBLIC_REPO_URL = "https://github.com/amart-builder/jarvis-cli"
 
 # Generic escalation contact line (per spec OQ4 default — no specific email).
-ESCALATION_CONTACT = "share with whoever set you up"
+ESCALATION_CONTACT = (
+    "share this output with whoever set up your Jarvis appliance "
+    "(if that's not you), or open an issue at "
+    "https://github.com/amart-builder/jarvis-cli/issues"
+)
 
 # Exit codes (per spec Assumption 19).
 EXIT_OK = 0
@@ -509,12 +513,19 @@ def _has_ssh_binary() -> bool:
 
 def _escalate(console: Console, step: str, stderr: str) -> None:
     """Two-failure escalation: print the verbatim error + contact line, exit 2."""
+    setup_hint = (
+        f"\nIf {SETUP_PATH} exists, attach its contents to your message — "
+        "it has the host/user/port settings that may be wrong."
+        if SETUP_PATH.exists()
+        else ""
+    )
     console.print(
         Panel(
             f"[red]I couldn't get past {step} after two tries.[/red]\n\n"
             f"Here's what I saw:\n[dim]{stderr.strip()}[/dim]\n\n"
-            f"Please {ESCALATION_CONTACT}. I'm not going to keep retrying — the "
-            "next attempt won't help without changing something.",
+            f"Please {ESCALATION_CONTACT}.{setup_hint}\n\n"
+            "I'm not going to keep retrying — the next attempt won't help "
+            "without changing something.",
             title="escalation",
             expand=False,
         )

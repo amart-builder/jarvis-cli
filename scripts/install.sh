@@ -66,7 +66,7 @@ else
     # to --break-system-packages (still scoped to --user, so it can't touch
     # the system Python).
     if ! python3 -m pip install --user pipx 2>/dev/null; then
-      warn "pip --user blocked by PEP 668 — retrying with --break-system-packages (user scope only)"
+      warn "pip --user blocked by PEP 668 — retrying with --break-system-packages (user scope only — safe, doesn't touch system Python)"
       python3 -m pip install --user --break-system-packages pipx
     fi
     python3 -m pipx ensurepath || true
@@ -114,4 +114,8 @@ ok "agent instructions written"
 
 INSTALLED_VERSION=$(jarvis version 2>&1 | head -1 || true)
 printf "\n%sjarvis-cli installed:%s %s\n" "${c_bold}" "${c_reset}" "${INSTALLED_VERSION}"
-printf "Try: %sjarvis context --json%s\n" "${c_green}" "${c_reset}"
+printf "\n%sNext step (the user runs this in their terminal — agents must NOT spawn it):%s\n" "${c_bold}" "${c_reset}"
+printf "  %sjarvis onboard%s\n" "${c_green}" "${c_reset}"
+printf "\nThis is the interactive walkthrough that wires this laptop to your remote\n"
+printf "Jarvis appliance over SSH. Once it finishes, %sjarvis context --json%s gives the\n" "${c_green}" "${c_reset}"
+printf "agent a full debug snapshot.\n"

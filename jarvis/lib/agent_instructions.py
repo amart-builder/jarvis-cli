@@ -45,15 +45,25 @@ Dispatch is gated by `~/.jarvis/setup.toml`:
 
 **Always check setup.toml first.** If `~/.jarvis/setup.toml` does NOT
 exist, the user has not run onboarding yet — every other jarvis command
-will hit the wrong machine. Your first move is:
+will hit the wrong machine. Your first move is to tell the user to run:
 
     jarvis onboard
 
-That's an interactive walkthrough: it auto-detects Tailscale peers,
-verifies SSH reachability, installs jarvis-cli on the remote if it's
-missing, and writes setup.toml. Let it prompt the user — do not
-suppress the prompts. After it succeeds, every subsequent `jarvis <cmd>`
-works transparently.
+**You, the agent, MUST NOT run `jarvis onboard` yourself.** It's
+interactive by design and will hang if you spawn it as a subprocess.
+Tell the user to type it in their own terminal; you watch the output
+they paste back and translate any prompts. Do not pipe stdin or use
+`expect`-style bypasses.
+
+The walkthrough auto-detects Tailscale peers, verifies SSH reachability,
+installs jarvis-cli on the remote if it's missing, and writes setup.toml.
+After it succeeds, every subsequent `jarvis <cmd>` works transparently.
+
+**If setup.toml exists with `mode = "local"` AND the user is reporting
+an *appliance* problem,** the file is stale (left over from earlier
+local-only debugging). Tell the user to run `jarvis onboard --reset` to
+re-onboard to remote mode. Otherwise jarvis will query the laptop, not
+the appliance, and produce misleading "everything's fine" output.
 
 ## When to use jarvis-cli
 
@@ -81,9 +91,10 @@ the docs you're reading actually are.
 
 1. Read `jarvis context --json`. Identify which component is unhealthy.
 2. For specific symptoms, query the docs further:
-   - `jarvis docs <topic>` — read a topic page
-   - `jarvis docs search <query>` — keyword search
-3. Inspect logs: `jarvis logs --component <name> --since <duration>`
+   - `jarvis docs list` — see what topics are available
+   - `jarvis docs show <topic>` — read a specific topic
+   - `jarvis docs search <query>` — full-text search the docs bundle
+3. Inspect logs: `jarvis logs <component> -n <lines>` (add `-f` to follow)
 4. Run `jarvis diagnose` if you need a packaged report of state for
    deeper analysis (its output is sanitized but more detailed than
    `context`).
@@ -91,6 +102,23 @@ the docs you're reading actually are.
    user.
 6. **ASK the user before running any state-changing command.** Even if
    the fix is obvious.
+
+### Worked example
+
+User: *"memory layer's been giving me 'connection refused' for the
+last hour."*
+
+1. Run `jarvis context --json`. See `health.memory.status = "down"`
+   and a "connection refused" line under `errors`.
+2. Run `jarvis logs memory -n 50` to see recent error lines from the
+   memory component directly.
+3. Tell the user: *"Your memory backend is down (recent logs show
+   <quote one line>). My proposed fix is `jarvis restart memory`.
+   Want me to run that?"*
+4. On user yes → run `jarvis restart memory`. Re-run `jarvis context
+   --json` to confirm `health.memory.status = "ok"`.
+5. If still down after one retry → stop. Follow "When you can't fix
+   it" below.
 
 ## Read-only commands (safe to run freely)
 
@@ -116,7 +144,9 @@ the docs you're reading actually are.
 If `jarvis context --json` doesn't give you enough to act on, OR the user
 declines a proposed fix, OR you've tried two distinct fixes without
 success: stop, summarize what you've learned, and tell the user to
-contact Alex with the `jarvis context --json` output attached.
+share the `jarvis context --json` output with whoever set up their
+Jarvis appliance, or open an issue at
+https://github.com/amart-builder/jarvis-cli/issues.
 
 Do not loop indefinitely. Two failed attempts is the escalation point.
 """
