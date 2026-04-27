@@ -13,6 +13,7 @@ from typing import Annotated
 
 import typer
 
+from jarvis.lib.dispatch import dispatch_remote, should_dispatch_remote
 from jarvis.lib.output import emit
 
 
@@ -21,6 +22,17 @@ def recover(
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Last-resort full recovery walkthrough."""
+    # Remote-dispatch prologue: confirm locally, then SSH with --yes.
+    cfg = should_dispatch_remote()
+    if cfg is not None:
+        if not yes and not json_output:
+            if not typer.confirm(
+                "This will snapshot state, stop everything, and run a sequenced "
+                "clean restart. Brief outage (~30s). Continue?"
+            ):
+                raise typer.Exit(code=1)
+        raise typer.Exit(code=dispatch_remote(cfg, ensure_yes=True))
+
     if not yes and not json_output:
         if not typer.confirm(
             "This will snapshot state, stop everything, and run a sequenced "

@@ -10,6 +10,7 @@ from typing import Annotated
 
 import typer
 
+from jarvis.lib.dispatch import dispatch_remote, should_dispatch_remote
 from jarvis.lib.output import emit
 from jarvis.lib.services import service_logs
 
@@ -21,6 +22,9 @@ def logs(
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Tail logs for one component."""
+    cfg = should_dispatch_remote()
+    if cfg is not None:
+        raise typer.Exit(code=dispatch_remote(cfg))
     if follow:
         # TODO v0.2: stream via subprocess.Popen + iter on stdout
         typer.echo("--follow not yet implemented in v0.1; use journalctl -fu directly")

@@ -10,6 +10,7 @@ from typing import Annotated
 
 import typer
 
+from jarvis.lib.dispatch import dispatch_remote, should_dispatch_remote
 from jarvis.lib.output import emit
 from jarvis.lib.services import KNOWN_COMPONENTS, restart_service
 
@@ -46,6 +47,20 @@ def restart(
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Restart one component, or `--all` for a sequenced full restart."""
+    # Remote-dispatch prologue: confirm locally for --all (preserves v0.3.0
+    # prompt text + muscle memory), then SSH the action with --yes so the
+    # remote shell doesn't re-prompt over the non-interactive SSH session.
+    cfg = should_dispatch_remote()
+    if cfg is not None:
+        if (all_services or component == "all") and not yes and not json_output:
+            confirm = typer.confirm(
+                f"Restart all {len(RESTART_ORDER)} components in sequence? "
+                "Brief (~10–30s) outage during the cycle."
+            )
+            if not confirm:
+                raise typer.Exit(code=1)
+        raise typer.Exit(code=dispatch_remote(cfg, ensure_yes=True))
+
     if all_services or component == "all":
         if not yes and not json_output:
             confirm = typer.confirm(

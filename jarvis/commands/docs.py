@@ -29,6 +29,7 @@ import httpx
 import typer
 from rich.markdown import Markdown
 
+from jarvis.lib.dispatch import dispatch_remote, should_dispatch_remote
 from jarvis.lib.output import console, emit, fail
 
 app = typer.Typer(help="Query the embedded canonical docs bundle.", no_args_is_help=True)
@@ -45,6 +46,9 @@ _OPENCLAW_LLMS_URL = "https://docs.openclaw.ai/llms-full.txt"
 @app.command("list")
 def list_docs(json_output: Annotated[bool, typer.Option("--json")] = False) -> None:
     """List every doc in the bundle."""
+    cfg = should_dispatch_remote()
+    if cfg is not None:
+        raise typer.Exit(code=dispatch_remote(cfg))
     if not _BUNDLE_ROOT.exists():
         fail(f"Docs bundle not found at {_BUNDLE_ROOT}. Run `jarvis docs update` first.")
     docs = sorted(p.relative_to(_BUNDLE_ROOT) for p in _BUNDLE_ROOT.rglob("*.md"))
@@ -68,6 +72,9 @@ def show(
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Show a doc or a sub-section of one."""
+    cfg = should_dispatch_remote()
+    if cfg is not None:
+        raise typer.Exit(code=dispatch_remote(cfg))
     path = _resolve_topic(topic, sub)
     if not path or not path.exists():
         fail(
@@ -91,6 +98,9 @@ def search(
     regex: Annotated[bool, typer.Option("--regex", help="Treat query as a regex.")] = False,
 ) -> None:
     """Full-text search across the docs bundle."""
+    cfg = should_dispatch_remote()
+    if cfg is not None:
+        raise typer.Exit(code=dispatch_remote(cfg))
     if not _BUNDLE_ROOT.exists():
         fail(f"Docs bundle not found at {_BUNDLE_ROOT}.")
     pattern = re.compile(query if regex else re.escape(query), re.IGNORECASE)
@@ -133,6 +143,9 @@ def update(
     docs (HARDENING, ORCHESTRATOR, workers, lessons-learned) are NOT
     touched — those are part of the package and updated by package release.
     """
+    cfg = should_dispatch_remote()
+    if cfg is not None:
+        raise typer.Exit(code=dispatch_remote(cfg))
     target = _BUNDLE_ROOT / "openclaw" / "llms-full.txt"
     target.parent.mkdir(parents=True, exist_ok=True)
     try:

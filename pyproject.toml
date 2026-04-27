@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jarvis-cli"
-version = "0.3.0"
+version = "0.4.0"
 description = "Operator + LLM debugging tool for Jarvis (the JarvisClaw appliance product). Wraps an OpenClaw install with a queryable CLI surface and embedded canonical docs."
 readme = "README.md"
 requires-python = ">=3.11"

@@ -16,6 +16,7 @@ from typing import Annotated
 
 import typer
 
+from jarvis.lib.dispatch import dispatch_remote, should_dispatch_remote
 from jarvis.lib.health import check_all, host_hint, resolve_host
 from jarvis.lib.output import emit
 
@@ -36,6 +37,9 @@ def health(
     JARVIS_API_BEARER_TOKEN in plist, ACP routing, etc.) — call out to
     `jarvis hardening-check`.
     """
+    cfg = should_dispatch_remote()
+    if cfg is not None:
+        raise typer.Exit(code=dispatch_remote(cfg))
     resolved_host = resolve_host(host)
     results = check_all(host=resolved_host, timeout=3.0)
     payload: dict[str, object] = {

@@ -40,3 +40,6 @@ diagnostics/*.tar.gz
 
 # Test caches
 tests/__pycache__/
+
+# setup.toml backups (in case any test artifact lands at the repo root)
+setup.toml.bak-*

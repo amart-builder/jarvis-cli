@@ -33,6 +33,7 @@ from typing import Annotated
 
 import typer
 
+from jarvis.lib.dispatch import dispatch_remote, should_dispatch_remote
 from jarvis.lib.docs_refresh import load_docs
 from jarvis.lib.health import check_all, host_hint, resolve_host
 from jarvis.lib.output import emit
@@ -65,6 +66,9 @@ def context(
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Dump full debugging context for LLM consumption."""
+    cfg = should_dispatch_remote()
+    if cfg is not None:
+        raise typer.Exit(code=dispatch_remote(cfg))
     plat = detect_platform()
     resolved_host = resolve_host(host)
     health_results = check_all(host=resolved_host, timeout=3.0)

@@ -29,6 +29,32 @@ This block was injected by `jarvis codex install` (from
 https://github.com/amart-builder/jarvis-cli). Treat the rules below as
 operating instructions whenever the user mentions Jarvis or OpenClaw issues.
 
+## Where jarvis-cli runs (laptop vs. remote appliance)
+
+The user's OpenClaw appliance almost never runs on the laptop you're
+talking to them on — it lives on a separate machine (a Mac Mini in
+their apartment, a NUC, or a VPS). `jarvis-cli` on the laptop acts as a
+**thin client**: every command transparently SSHes to the configured
+remote host and prints its output here.
+
+Dispatch is gated by `~/.jarvis/setup.toml`:
+- **`mode = "remote"`** → jarvis SSHes the same command to `user@host` and
+  exits with the remote's exit code. Stdout/stderr stream straight back.
+- **File missing or `mode = "local"`** → jarvis runs locally (assumes the
+  appliance is on this machine, which it usually isn't).
+
+**Always check setup.toml first.** If `~/.jarvis/setup.toml` does NOT
+exist, the user has not run onboarding yet — every other jarvis command
+will hit the wrong machine. Your first move is:
+
+    jarvis onboard
+
+That's an interactive walkthrough: it auto-detects Tailscale peers,
+verifies SSH reachability, installs jarvis-cli on the remote if it's
+missing, and writes setup.toml. Let it prompt the user — do not
+suppress the prompts. After it succeeds, every subsequent `jarvis <cmd>`
+works transparently.
+
 ## When to use jarvis-cli
 
 If the user mentions any of:
@@ -39,7 +65,7 @@ If the user mentions any of:
 - "gateway / channel / discord / imessage" failures from the appliance
 - generally anything where their installed appliance is misbehaving
 
-Your **first move** is to run:
+Your **first move** (assuming setup.toml exists — see above) is to run:
 
     jarvis context --json
 

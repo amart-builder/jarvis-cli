@@ -20,6 +20,7 @@ import typer
 from rich.panel import Panel
 from rich.text import Text
 
+from jarvis.lib.dispatch import dispatch_remote, should_dispatch_remote
 from jarvis.lib.health import check_all, host_hint, resolve_host
 from jarvis.lib.output import emit, status_table
 from jarvis.lib.platform import detect_platform
@@ -41,6 +42,9 @@ def status(
     ] = 2.0,
 ) -> None:
     """Quick health overview. Read-only, fast (~3s)."""
+    cfg = should_dispatch_remote()
+    if cfg is not None:
+        raise typer.Exit(code=dispatch_remote(cfg))
     resolved_host = resolve_host(host)
     results = check_all(host=resolved_host, timeout=timeout)
     plat = detect_platform()

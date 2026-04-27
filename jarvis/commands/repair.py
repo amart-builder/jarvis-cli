@@ -15,6 +15,7 @@ from typing import Annotated
 import typer
 
 from jarvis.lib import macos as mac
+from jarvis.lib.dispatch import dispatch_remote, should_dispatch_remote
 from jarvis.lib.output import emit, fail
 from jarvis.lib.platform import detect_platform
 
@@ -75,6 +76,19 @@ def plist(
         7. Wait for /health (up to 30s)
         8. Verify the token is present in the on-disk plist
     """
+    # Remote-dispatch prologue: confirm locally (unless --dry-run, which is
+    # read-only), then SSH the action with --yes so the remote shell doesn't
+    # re-prompt over the non-interactive SSH session.
+    cfg = should_dispatch_remote()
+    if cfg is not None:
+        if not dry_run and not yes and not json_output:
+            if not typer.confirm(
+                "Inject JARVIS_API_BEARER_TOKEN into the gateway plist and "
+                "reload the gateway? Brief outage (~5s)."
+            ):
+                raise typer.Exit(code=1)
+        raise typer.Exit(code=dispatch_remote(cfg, ensure_yes=not dry_run))
+
     plat = detect_platform()
     if plat.os_name != "macos":
         fail(
@@ -249,6 +263,14 @@ def memory(
     TODO v0.3: stop service, rm $NEO4J_DATA/databases/*/store_lock if stale,
     restart, wait for /health 200.
     """
+    # Remote-dispatch prologue: confirm locally, then SSH with --yes.
+    cfg = should_dispatch_remote()
+    if cfg is not None:
+        if not yes and not json_output:
+            if not typer.confirm("Restart jarvis-memory and clear stale locks?"):
+                raise typer.Exit(code=1)
+        raise typer.Exit(code=dispatch_remote(cfg, ensure_yes=True))
+
     if not yes and not json_output:
         if not typer.confirm("Restart jarvis-memory and clear stale locks?"):
             raise typer.Exit(code=1)
@@ -269,6 +291,14 @@ def channels(
     TODO v0.3: probe Discord with bot token, surface specific re-auth
     prompts the operator can act on.
     """
+    # Remote-dispatch prologue: confirm locally, then SSH with --yes.
+    cfg = should_dispatch_remote()
+    if cfg is not None:
+        if not yes and not json_output:
+            if not typer.confirm("Probe and re-auth Discord channel token?"):
+                raise typer.Exit(code=1)
+        raise typer.Exit(code=dispatch_remote(cfg, ensure_yes=True))
+
     if not yes and not json_output:
         if not typer.confirm("Probe and re-auth Discord channel token?"):
             raise typer.Exit(code=1)

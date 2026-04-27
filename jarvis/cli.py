@@ -15,6 +15,7 @@ from jarvis.commands import (
     docs as docs_cmd,
     health as health_cmd,
     logs as logs_cmd,
+    onboard as onboard_cmd,
     recover as recover_cmd,
     repair as repair_cmd,
     restart as restart_cmd,
@@ -44,6 +45,7 @@ app.command("restart")(restart_cmd.restart)
 app.command("diagnose")(diagnose_cmd.diagnose)
 app.command("context")(context_cmd.context)
 app.command("recover")(recover_cmd.recover)
+app.command("onboard")(onboard_cmd.onboard)
 
 
 @app.command("version")

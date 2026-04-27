@@ -18,6 +18,7 @@ from typing import Annotated
 
 import typer
 
+from jarvis.lib.dispatch import dispatch_remote, should_dispatch_remote
 from jarvis.lib.health import check_all, host_hint, resolve_host
 from jarvis.lib.output import emit
 from jarvis.version import __version__
@@ -42,6 +43,9 @@ def diagnose(
     TODO v0.3: pack into a tarball, run hardening rules check, capture
     recent log lines, support --upload via signed URL.
     """
+    cfg = should_dispatch_remote()
+    if cfg is not None:
+        raise typer.Exit(code=dispatch_remote(cfg))
     resolved_host = resolve_host(host)
     results = check_all(host=resolved_host, timeout=3.0)
     timestamp = _dt.datetime.now(_dt.UTC).isoformat()
