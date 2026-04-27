@@ -28,6 +28,18 @@ from jarvis.lib.setup_config import load as load_setup
 # controls the docs-cache TTL on whichever side the docs run on.
 FORWARD_ENV_VARS = ("JARVIS_HOST", "JARVIS_DOCS_TTL")
 
+# Non-interactive ssh sessions don't source ~/.zshrc (and on macOS the
+# brew/pipx PATH lives there, not in ~/.zshenv). Without this prefix, the
+# remote `jarvis` invocation can't find itself: pipx installs to
+# ~/.local/bin (Linux + macOS) and brew sometimes drops binaries in
+# /opt/homebrew/bin (Apple Silicon) or /usr/local/bin (Intel). The
+# embedded $HOME / $PATH refs are expanded by the REMOTE shell, so we
+# pass them as a literal-string prefix in remote_cmd rather than via the
+# env mechanism (which would shlex-quote them).
+REMOTE_PATH_PREFIX = (
+    'PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH" '
+)
+
 
 def should_dispatch_remote() -> SetupConfig | None:
     """Return the SetupConfig if we should SSH this command, else None.
@@ -58,7 +70,7 @@ def dispatch_remote(
     if ensure_yes and not _has_yes_flag(args):
         args.append("--yes")
 
-    remote_cmd = "jarvis " + " ".join(shlex.quote(a) for a in args)
+    remote_cmd = REMOTE_PATH_PREFIX + "jarvis " + " ".join(shlex.quote(a) for a in args)
     env = _forwarded_env()
     result = ssh_wrapper.run(cfg, remote_cmd, env=env, capture=False)
     return result.returncode
@@ -68,10 +80,12 @@ def build_remote_invocation(args: list[str], env: dict[str, str] | None = None) 
     """Public for tests: render the exact remote command string.
 
     Equivalent to what `dispatch_remote` ends up sending over SSH (minus the
-    env prefix, which `ssh_wrapper.build_ssh_args` injects on its end).
+    forwarded-env prefix, which `ssh_wrapper.build_ssh_args` injects on its
+    end). Includes the REMOTE_PATH_PREFIX so non-interactive ssh sessions
+    can find pipx-installed binaries on macOS/Linux.
     """
     quoted = " ".join(shlex.quote(a) for a in args)
-    cmd = f"jarvis {quoted}"
+    cmd = f"{REMOTE_PATH_PREFIX}jarvis {quoted}"
     if env:
         prefix = " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items())
         return f"{prefix} {cmd}"

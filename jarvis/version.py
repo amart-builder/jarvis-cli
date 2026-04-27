@@ -5,7 +5,7 @@ re-pulled from upstream OpenClaw periodically. `jarvis version` prints both.
 """
 from __future__ import annotations
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 # Docs bundle version — set by scripts/build-docs-bundle.sh at package build time.
 # Format: ISO date of the latest pull from docs.openclaw.ai/llms-full.txt.

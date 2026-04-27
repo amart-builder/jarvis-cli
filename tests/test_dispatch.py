@@ -9,6 +9,7 @@ import pytest
 
 from jarvis.lib import dispatch, setup_config
 from jarvis.lib.dispatch import (
+    REMOTE_PATH_PREFIX,
     _has_yes_flag,
     build_remote_invocation,
     dispatch_remote,
@@ -65,18 +66,30 @@ def test_has_yes_flag_returns_false_when_absent() -> None:
 
 def test_build_remote_invocation_quotes_safe_args() -> None:
     cmd = build_remote_invocation(["status", "--json"])
-    assert cmd == "jarvis status --json"
+    assert cmd == f"{REMOTE_PATH_PREFIX}jarvis status --json"
 
 
 def test_build_remote_invocation_quotes_special_chars() -> None:
     cmd = build_remote_invocation(["docs", "search", "rule 18"])
     # shlex.quote wraps "rule 18" in single quotes.
     assert "'rule 18'" in cmd
+    # PATH prefix is always present so the remote shell can find pipx-installed jarvis.
+    assert cmd.startswith(REMOTE_PATH_PREFIX)
 
 
 def test_build_remote_invocation_adds_env_prefix() -> None:
     cmd = build_remote_invocation(["status"], env={"JARVIS_HOST": "1.2.3.4"})
-    assert cmd == "JARVIS_HOST=1.2.3.4 jarvis status"
+    assert cmd == f"JARVIS_HOST=1.2.3.4 {REMOTE_PATH_PREFIX}jarvis status"
+
+
+def test_remote_path_prefix_includes_pipx_and_brew_dirs() -> None:
+    """The PATH prefix must reach pipx-installed jarvis (~/.local/bin) and
+    brewed Python (/opt/homebrew/bin or /usr/local/bin) on a non-interactive
+    ssh session. Without this, dispatch fails on Apple-Silicon Macs."""
+    assert "$HOME/.local/bin" in REMOTE_PATH_PREFIX
+    assert "/opt/homebrew/bin" in REMOTE_PATH_PREFIX
+    assert "/usr/local/bin" in REMOTE_PATH_PREFIX
+    assert "$PATH" in REMOTE_PATH_PREFIX  # don't clobber the user's existing PATH
 
 
 def _stub_ssh_run(captured: dict, returncode: int = 0):
@@ -106,7 +119,7 @@ def test_dispatch_remote_appends_yes_when_ensure_yes(
     rc = dispatch_remote(cfg, ensure_yes=True)
     assert rc == 0
     assert captured["remote_cmd"].endswith("--yes")
-    assert "jarvis restart --all --yes" == captured["remote_cmd"]
+    assert captured["remote_cmd"] == f"{REMOTE_PATH_PREFIX}jarvis restart --all --yes"
 
 
 def test_dispatch_remote_does_not_double_yes(
