@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+*.egg-info/
+*.egg
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local config + secrets
+.env
+.env.*
+!.env.example
+
+# Local OpenClaw docs cache (pulled at runtime — versioned snapshot lives in docs_bundle/openclaw/)
+.openclaw-docs-cache/
+
+# Diagnostic bundles produced by `jarvis diagnose`
+diagnostics/*.tar.gz
+
+# Local backup files (e.g. created by pull-openclaw-docs.sh)
+*.bak
+
+# Test caches
+tests/__pycache__/
